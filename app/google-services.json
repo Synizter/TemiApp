@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "416769798380",
+    "firebase_url": "https://virachtemi.firebaseio.com",
+    "project_id": "virachtemi",
+    "storage_bucket": "virachtemi.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:416769798380:android:341ec7597979805b5735c9",
+        "android_client_info": {
+          "package_name": "com.virachlabo.temiapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "416769798380-oshb5d015ss3hqubrhkbg5thk4hki8aa.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBQI_k_Ba3gQgt9Ccg1UOToeC9d2_UQQhY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "416769798380-oshb5d015ss3hqubrhkbg5thk4hki8aa.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
