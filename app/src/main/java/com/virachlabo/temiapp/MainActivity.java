@@ -7,10 +7,15 @@ import androidx.core.app.ActivityCompat;
 
 import android.Manifest;
 import android.app.Activity;
+import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.os.AsyncTask;
+import android.os.Build;
 import android.os.Bundle;
+import android.speech.RecognitionListener;
+import android.speech.RecognizerIntent;
+import android.speech.SpeechRecognizer;
 import android.util.Log;
 import android.view.View;
 import android.widget.Toast;
@@ -59,6 +64,7 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
 
     //Permission
     private static final int REQUEST_EXTERNAL_STORAGE = 1;
+    private static final int REQUEST_CODE_VOICE_RECOGNITION = 1001;
 
     private static final int REQUEST_CODE_NORMAL = 0;
     private static final int REQUEST_CODE_FACE_START = 1;
@@ -73,14 +79,15 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
             Manifest.permission.WRITE_EXTERNAL_STORAGE
     };
 
+    private static String[] PERMISSION_AUDIO = {
+            Manifest.permission.RECORD_AUDIO
+    };
+
     //Object and Variable
     private Robot robot;
 
-
-    //TEST new movemvent
-    private Position currentPosition;
-    private Position lastPosition;
-    private String gotoStatus;
+    private SpeechRecognizer speechRecognizer; //STT
+    Intent speechRecognizerIntent; //STT
 
     //MQTT Instance
     MqttWrapper mqttWrapper;
@@ -88,11 +95,19 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
     //ActrionFlag
     Boolean isRobotActionComplete = true;
 
-    //Verify permission function
     public static void verifyStroagePermission(Activity activity) {
         int permission = ActivityCompat.checkSelfPermission(activity, Manifest.permission.WRITE_EXTERNAL_STORAGE);
         if (permission != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(activity, PERMISSIONS_STORAGE, REQUEST_EXTERNAL_STORAGE);
+        }
+    }
+
+    public static void verifyAudioRecordPermission(Activity activity) {
+        int permission = ActivityCompat.checkSelfPermission(activity, Manifest.permission.RECORD_AUDIO);
+        if(permission != PackageManager.PERMISSION_GRANTED) {
+            if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                ActivityCompat.requestPermissions(activity, PERMISSION_AUDIO, REQUEST_CODE_VOICE_RECOGNITION);
+            }
         }
     }
 
@@ -106,6 +121,62 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         verifyStroagePermission(this);
+        verifyAudioRecordPermission(this);
+
+        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this); //STT
+        speechRecognizerIntent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH); //STT
+        speechRecognizerIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "th-TH"); //STT
+
+
+        speechRecognizer.setRecognitionListener(new RecognitionListener() {
+            @Override
+            public void onReadyForSpeech(Bundle params) {
+
+            }
+
+            @Override
+            public void onBeginningOfSpeech() {
+                printLog("Start speak");
+            }
+
+            @Override
+            public void onRmsChanged(float rmsdB) {
+
+            }
+
+            @Override
+            public void onBufferReceived(byte[] buffer) {
+
+            }
+
+            @Override
+            public void onEndOfSpeech() {
+                speechRecognizer.stopListening();
+            }
+
+            @Override
+            public void onError(int error) {
+
+            }
+
+            @Override
+            public void onResults(Bundle results) {
+
+            }
+
+            @Override
+            public void onPartialResults(Bundle partialResults) {
+
+            }
+
+            @Override
+            public void onEvent(int eventType, Bundle params) {
+
+            }
+        });
+
+
+
         robot = Robot.getInstance(); // get an instance of the robot in order to begin using its features.
         robot.addOnSdkExceptionListener(this);
         robot.addOnCurrentPositionChangedListener(this);
@@ -136,7 +207,6 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
 
                 robot.onStart(activityInfo);
                 //Start MQTT Server
-                speak("Fuck you Temi");
                 StartMqtt();
 
             } catch (PackageManager.NameNotFoundException e) {
@@ -177,7 +247,6 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
 
     @Override
     public void onGoToLocationStatusChanged(@NotNull String location, @NotNull String status, int descriptionId, @NotNull String description) {
-        gotoStatus = status;
         switch (status) {
             case OnGoToLocationStatusChangedListener.START:
                 printLog("Start");
@@ -195,7 +264,6 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
     @Override
     public void onCurrentPositionChanged(@NotNull Position position) {
         Log.i("POSITION", "" + position.toString());
-        currentPosition = position;
 
     }
 
@@ -205,14 +273,28 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
         robot.speak(ttsRequest);
     }
 
-    public void GetAllUser() {
-        List<UserInfo> userInfos = robot.getAllContact();
-        for (UserInfo userInfo : userInfos) {
-            printLog("Username", userInfo.getName());
-            printLog("UserID", userInfo.getUserId());
-            printLog("UserRole", String.valueOf(userInfo.getRole()));
-        }
+    //TEST Function
+//    public List<UserInfo> GetAllUser() {
+//        List<UserInfo> userInfos = robot.getAllContact();
+//        for (UserInfo userInfo : userInfos) {
+//            printLog("Username", userInfo.getName());
+//            printLog("UserID", userInfo.getUserId());
+//            printLog("UserRole", String.valueOf(userInfo.getRole()));
+//        }
+//        return userInfos;
+//    }
 
+    public void startTelepresence(String name) {
+        //Find peerID by name
+        List<UserInfo> userInfos = robot.getAllContact();
+
+        for (UserInfo userInfo : userInfos) {
+            if (userInfo.getName().contains(name)) {
+                printLog("Start Telepresence");
+                robot.startTelepresence(userInfo.getName(), userInfo.getUserId());
+            }
+        }
+        speak("No user found on contact list");
     }
 
     public void goToPosition(float xp, float yp, float yawnp) {
@@ -270,7 +352,6 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
                 }catch (JSONException e) {
                     Log.d("Error", e.toString());
                 }
-
             }
 
             @Override
@@ -286,6 +367,16 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
             switch (actionInfo.get("action").toString()) {
                 case "SPEAK":
                     speak(actionInfo.get("content").toString());
+                    break;
+                case "GOTO":
+                    goTo(actionInfo.get("content").toString());
+                    break;
+                case "CALL":
+                    startTelepresence(actionInfo.get("content").toString());
+                    break;
+                case "NLP_TH_START":
+                    //start chatbot sequence
+                    speechRecognizer.startListening(speechRecognizerIntent);
                     break;
             }
         }
