@@ -7,17 +7,25 @@ import androidx.core.app.ActivityCompat;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.DownloadManager;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
+import android.media.AudioAttributes;
+import android.media.AudioManager;
+import android.media.MediaPlayer;
+import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
 import android.util.Log;
 import android.view.View;
+import android.widget.Button;
 import android.widget.Toast;
 
 import com.google.firebase.FirebaseApp;
@@ -47,16 +55,26 @@ import org.jetbrains.annotations.NotNull;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.File;
+import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.ListIterator;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.locks.ReentrantLock;
+import java.nio.charset.StandardCharsets;
 
 public class MainActivity<RobotActionExecutorService> extends AppCompatActivity implements
         OnRobotReadyListener,
         Robot.TtsListener,
+        Robot.WakeupWordListener,
+        Robot.AsrListener,
         OnSdkExceptionListener,
         OnCurrentPositionChangedListener,
         OnTelepresenceEventChangedListener,
@@ -94,6 +112,8 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
 
     //ActrionFlag
     Boolean isRobotActionComplete = true;
+    private Context context_main;
+
 
     public static void verifyStroagePermission(Activity activity) {
         int permission = ActivityCompat.checkSelfPermission(activity, Manifest.permission.WRITE_EXTERNAL_STORAGE);
@@ -104,8 +124,8 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
 
     public static void verifyAudioRecordPermission(Activity activity) {
         int permission = ActivityCompat.checkSelfPermission(activity, Manifest.permission.RECORD_AUDIO);
-        if(permission != PackageManager.PERMISSION_GRANTED) {
-            if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        if (permission != PackageManager.PERMISSION_GRANTED) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 ActivityCompat.requestPermissions(activity, PERMISSION_AUDIO, REQUEST_CODE_VOICE_RECOGNITION);
             }
         }
@@ -113,6 +133,22 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
 
     public void RobotSpeak(String s, boolean isOverlayed) {
         robot.speak(TtsRequest.create(s, isOverlayed));
+    }
+
+    public void RobotSpeak_TH(String word) {
+        //start http request
+        try {
+            String th_encode = URLEncoder.encode(word, "utf-8");
+            String DOWNLOAD_URL = "https://tts-kaitom2.iapp.co.th/tts?text=" + th_encode;
+            printLog(DOWNLOAD_URL);
+            try {
+                PlayAudioManager.playAudio(getApplicationContext(), DOWNLOAD_URL);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+        }
     }
 
     //Androod App callback -------------------------------------------------------
@@ -123,15 +159,24 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
         verifyStroagePermission(this);
         verifyAudioRecordPermission(this);
 
+
         speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this); //STT
         speechRecognizerIntent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH); //STT
         speechRecognizerIntent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "th-TH"); //STT
+
+        Button button = findViewById(R.id.button_test);
+        button.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                speechRecognizer.startListening(speechRecognizerIntent); //Get built-in STT working
+            }
+        });
 
 
         speechRecognizer.setRecognitionListener(new RecognitionListener() {
             @Override
             public void onReadyForSpeech(Bundle params) {
-
+                printLog("START");
             }
 
             @Override
@@ -162,6 +207,9 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
             @Override
             public void onResults(Bundle results) {
 
+                ArrayList<String> data = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                printLog(data.get(0));
+                RobotSpeak_TH(data.get(0));
             }
 
             @Override
@@ -174,7 +222,6 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
 
             }
         });
-
 
 
         robot = Robot.getInstance(); // get an instance of the robot in order to begin using its features.
@@ -193,8 +240,8 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
         super.onStart();
         robot.addOnRobotReadyListener(this);
         robot.addTtsListener(this);
-
-
+        robot.addWakeupWordListener(this);
+        robot.addAsrListener(this);
     }
 
     // ------------------------------------------------------ Robot SDK Callvack -------------------------------------------------------------
@@ -206,6 +253,8 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
 //                Robot.getInstance().onStart(); //method may change the visibility of top bar.
 
                 robot.onStart(activityInfo);
+                printLog(robot.getWakeupWord());
+                robot.requestToBeKioskApp();
                 //Start MQTT Server
                 StartMqtt();
 
@@ -234,11 +283,9 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
         printLog("onTelepresenceEvent", callEventModel.toString());
         if (callEventModel.getType() == CallEventModel.TYPE_INCOMING) {
             Toast.makeText(this, "Incoming call", Toast.LENGTH_LONG).show();
-        }
-        else if  (callEventModel.getType() == CallEventModel.TYPE_OUTGOING) {
+        } else if (callEventModel.getType() == CallEventModel.TYPE_OUTGOING) {
             Toast.makeText(this, "Outgoing call", Toast.LENGTH_LONG).show();
-        }
-        else if (callEventModel.getType() == CallEventModel.STATE_ENDED) {
+        } else if (callEventModel.getType() == CallEventModel.STATE_ENDED) {
             mqttWrapper.publish("actionState/", "Done");
             isRobotActionComplete = true;
         }
@@ -257,6 +304,7 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
             case OnGoToLocationStatusChangedListener.COMPLETE:
                 printLog("Arrived");
                 isRobotActionComplete = true;
+                mqttWrapper.publish("actionState/", "Done");
                 break;
         }
     }
@@ -345,11 +393,11 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
                 printLog("Arrived message: " + message.toString());
                 try {
                     JSONObject jsonObject = new JSONObject(message.toString());
-                    if(isRobotActionComplete == true) {
+                    if (isRobotActionComplete == true) {
                         isRobotActionComplete = false;
                         actionDecoder(jsonObject);
                     }
-                }catch (JSONException e) {
+                } catch (JSONException e) {
                     Log.d("Error", e.toString());
                 }
             }
@@ -376,12 +424,40 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
                     break;
                 case "NLP_TH_START":
                     //start chatbot sequence
-                    speechRecognizer.startListening(speechRecognizerIntent);
+                    speechRecognizer.startListening(speechRecognizerIntent); //Get built-in STT working
                     break;
             }
-        }
-        catch (JSONException e) {
+        } catch (JSONException e) {
             e.printStackTrace();
+        }
+    }
+
+    @Override
+    public void onWakeupWord(@NotNull String wakeupWord, int direction) {
+        printLog("onWakeupWord", wakeupWord + ", " + direction);
+        speechRecognizer.startListening(speechRecognizerIntent); //Get built-in STT working
+    }
+
+    @Override
+    public void onAsrResult(@NotNull String asrResult) {
+        printLog("onAsrResult", "asrResult = " + asrResult);
+
+        if (asrResult.equalsIgnoreCase("Hello")) {
+            robot.askQuestion("Hello, I'm temi, what can I do for you?");
+        } else if (asrResult.equalsIgnoreCase("Play music")) {
+            robot.speak(TtsRequest.create("Okay, please enjoy.", false));
+            robot.finishConversation();
+        } else if (asrResult.equalsIgnoreCase("Play movie")) {
+            robot.speak(TtsRequest.create("Okay, please enjoy.", false));
+            robot.finishConversation();
+        } else if (asrResult.toLowerCase().contains("follow me")) {
+            robot.finishConversation();
+            robot.beWithMe();
+        } else if (asrResult.toLowerCase().contains("go to home base")) {
+            robot.finishConversation();
+            robot.goTo("home base");
+        } else {
+            robot.askQuestion("Sorry I can't understand you, could you please ask something else?");
         }
     }
 }
