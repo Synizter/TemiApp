@@ -6,6 +6,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.DownloadManager;
 import android.content.Context;
@@ -28,6 +29,7 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.Toast;
 
+import com.firebase.ui.auth.data.model.User;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.database.ChildEventListener;
 import com.google.firebase.database.DataSnapshot;
@@ -70,6 +72,14 @@ import java.util.Set;
 import java.util.concurrent.locks.ReentrantLock;
 import java.nio.charset.StandardCharsets;
 
+
+/*
+* Contact List
+* Kobkrit:dade8fa3ac93fcf26340397be3d5840a
+* P'man:fe1090ed941db12ed1d350730031ea5b
+* พี่แพรSIIT:4990c18cea5e6604cc1adc384fe224e8
+* Aj Virach:67696f1ff709a3b0804ae43641ed8d85
+* */
 public class MainActivity<RobotActionExecutorService> extends AppCompatActivity implements
         OnRobotReadyListener,
         Robot.TtsListener,
@@ -149,8 +159,21 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
         } catch (UnsupportedEncodingException e) {
             e.printStackTrace();
         }
+        mqttWrapper.publish("actionState/", "Done");
+        isRobotActionComplete = true;
     }
 
+    public String getContactID(String name) {
+
+        List<UserInfo> userInfors = robot.getAllContact();
+        for (UserInfo info : userInfors){
+            if(info.getName().equals(name) || info.getName().contains(name)) {
+                return info.getUserId();
+            }
+        }
+        return "Not found";
+
+    }
     //Androod App callback -------------------------------------------------------
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -168,7 +191,8 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
         button.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                speechRecognizer.startListening(speechRecognizerIntent); //Get built-in STT working
+                //TEST
+                robot.startTelepresence("TEST", "fe1090ed941db12ed1d350730031ea5b");
             }
         });
 
@@ -223,11 +247,12 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
             }
         });
 
-
         robot = Robot.getInstance(); // get an instance of the robot in order to begin using its features.
         robot.addOnSdkExceptionListener(this);
         robot.addOnCurrentPositionChangedListener(this);
 
+        getAllContact();
+        StartMqtt();
     }
 
     @Override
@@ -242,6 +267,20 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
         robot.addTtsListener(this);
         robot.addWakeupWordListener(this);
         robot.addAsrListener(this);
+        isRobotActionComplete = true;
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        printLog("On Resume!");
+        isRobotActionComplete = true;
+        try {
+            StartMqtt();
+            mqttWrapper.publish("actionState/", "Done");
+        }catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     // ------------------------------------------------------ Robot SDK Callvack -------------------------------------------------------------
@@ -253,10 +292,8 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
 //                Robot.getInstance().onStart(); //method may change the visibility of top bar.
 
                 robot.onStart(activityInfo);
-                printLog(robot.getWakeupWord());
                 robot.requestToBeKioskApp();
-                //Start MQTT Server
-                StartMqtt();
+                isRobotActionComplete = true;
 
             } catch (PackageManager.NameNotFoundException e) {
                 throw new RuntimeException(e);
@@ -288,9 +325,9 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
         } else if (callEventModel.getType() == CallEventModel.STATE_ENDED) {
             mqttWrapper.publish("actionState/", "Done");
             isRobotActionComplete = true;
+            printLog("Call end");
         }
     }
-
 
     @Override
     public void onGoToLocationStatusChanged(@NotNull String location, @NotNull String status, int descriptionId, @NotNull String description) {
@@ -321,6 +358,15 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
         robot.speak(ttsRequest);
     }
 
+    @SuppressLint("NewApi")
+    public List<UserInfo> getAllContact() {
+
+        List<UserInfo> userInfos = robot.getAllContact();
+        for(UserInfo userInfo : userInfos) {
+            printLog(String.join(":", userInfo.getName().toString(), userInfo.getUserId().toString()));
+        }
+        return userInfos;
+    }
     //TEST Function
 //    public List<UserInfo> GetAllUser() {
 //        List<UserInfo> userInfos = robot.getAllContact();
@@ -374,13 +420,11 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
 
     //----------------------------- MQTT --------------------------------------
     private void StartMqtt() {
-        printLog("Inside MQTT START");
         mqttWrapper = new MqttWrapper(getApplicationContext());
         mqttWrapper.setCallback(new MqttCallbackExtended() {
             @Override
             public void connectComplete(boolean reconnect, String serverURI) {
                 printLog("Connect to " + serverURI.toString());
-                printLog("TEST");
             }
 
             @Override
@@ -394,10 +438,16 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
                 printLog("Arrived message: " + message.toString());
                 try {
                     JSONObject jsonObject = new JSONObject(message.toString());
-                    if (isRobotActionComplete == true) {
+                    if ((isRobotActionComplete)) {
+                        printLog("Action Done");
+                    } else {
+                        printLog("Action Not Done");
+                    }
+                    if(isRobotActionComplete) {
                         isRobotActionComplete = false;
                         actionDecoder(jsonObject);
                     }
+
                 } catch (JSONException e) {
                     Log.d("Error", e.toString());
                 }
@@ -415,13 +465,20 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
         try {
             switch (actionInfo.get("action").toString()) {
                 case "SPEAK":
-                    speak(actionInfo.get("content").toString());
+//                    speak(actionInfo.get("content").toString());
+                    if(actionInfo.get("language").equals("th")) {
+                        RobotSpeak_TH(actionInfo.get("content").toString());
+                    }
+                    else if(actionInfo.get("language").equals("en")) {
+                        speak(actionInfo.get("content").toString());
+                    }
                     break;
                 case "GOTO":
                     goTo(actionInfo.get("content").toString());
                     break;
                 case "CALL":
-                    startTelepresence(actionInfo.get("content").toString());
+//                    startTelepresence("Blockly-agent", actionInfo.get("content").toString());
+                    robot.startTelepresence("Blockly-agent", actionInfo.get("content").toString());
                     break;
                 case "NLP_TH_START":
                     //start chatbot sequence
