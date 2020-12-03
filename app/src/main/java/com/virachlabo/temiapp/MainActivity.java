@@ -380,6 +380,7 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
             @Override
             public void connectComplete(boolean reconnect, String serverURI) {
                 printLog("Connect to " + serverURI.toString());
+                printLog("TEST");
             }
 
             @Override
