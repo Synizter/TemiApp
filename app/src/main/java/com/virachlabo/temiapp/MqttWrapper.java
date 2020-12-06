@@ -1,7 +1,12 @@
 package com.virachlabo.temiapp;
 
+import android.app.Service;
 import android.content.Context;
+import android.content.Intent;
+import android.os.IBinder;
 import android.util.Log;
+
+import androidx.annotation.Nullable;
 
 import org.eclipse.paho.android.service.MqttAndroidClient;
 import org.eclipse.paho.client.mqttv3.DisconnectedBufferOptions;
@@ -18,13 +23,15 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.ListIterator;
 
-public class MqttWrapper {
+public class MqttWrapper extends Service {
     public MqttAndroidClient mqttAndroidClient;
 
     final String serverUri = "tcp://babyai.org:1883";
     final String clientID = "VirachLabo-Temi";
     final String username = "wifimod";
     final String password = "PeEFc9Aq";
+
+    private String TAG = "mqtt-serrvice";
 
     List<String> subscriptionTopic = new ArrayList<String>();
 
@@ -115,4 +122,16 @@ public class MqttWrapper {
             e.printStackTrace();
         }
      }
+
+    @Nullable
+    @Override
+    public IBinder onBind(Intent intent) {
+        return null;
+    }
+
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        Log.v(TAG, "onStartCommand()");
+        return START_STICKY;
+    }
 }
