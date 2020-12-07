@@ -114,6 +114,7 @@ public class MqttWrapper extends Service {
 
      public void publish(String topic, String msg) {
 
+        if(mqttAndroidClient.isConnected() == false) { connect(); }
         MqttMessage mqttMessage = new MqttMessage(msg.getBytes());
         try {
             mqttAndroidClient.publish(topic, mqttMessage);

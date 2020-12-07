@@ -3,6 +3,16 @@ package com.virachlabo.temiapp;
 import android.app.IntentService;
 import android.content.Intent;
 
+import org.eclipse.paho.android.service.MqttAndroidClient;
+import org.eclipse.paho.client.mqttv3.DisconnectedBufferOptions;
+import org.eclipse.paho.client.mqttv3.IMqttActionListener;
+import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
+import org.eclipse.paho.client.mqttv3.IMqttToken;
+import org.eclipse.paho.client.mqttv3.MqttCallback;
+import org.eclipse.paho.client.mqttv3.MqttCallbackExtended;
+import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
+import org.eclipse.paho.client.mqttv3.MqttException;
+import org.eclipse.paho.client.mqttv3.MqttMessage;
 
 /**
  * An {@link IntentService} subclass for handling asynchronous task requests in
@@ -20,9 +30,25 @@ public class MqttService extends IntentService {
     public static final String EXTRA_PARAM1 = "com.virachlabo.temiapp.extra.PARAM1";
     public static final String EXTRA_PARAM2 = "com.virachlabo.temiapp.extra.PARAM2";
 
+    private static final String TAG = "MQTTMessagingService";
+    private static final String SERVER_URI = "tcp://babyai.org:1883";
+    private static final String CLIENT_ID = "VirachLabo-Temi";
+    private static final String USERNAME = "wifimod";
+    private static final String PASSWORD = "PeEFc9Aq";
+
+    private MqttAndroidClient mqttAndroidClient;
+
     public MqttService() {
-        super("MqttService");
+        super(TAG);
+        mqttAndroidClient = new MqttAndroidClient(this, SERVER_URI, CLIENT_ID);
     }
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+    }
+
+
 
     @Override
     protected void onHandleIntent(Intent intent) {

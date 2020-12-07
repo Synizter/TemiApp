@@ -44,9 +44,11 @@ import com.robotemi.sdk.exception.SdkException;
 import com.robotemi.sdk.listeners.OnGoToLocationStatusChangedListener;
 import com.robotemi.sdk.listeners.OnRobotReadyListener;
 import com.robotemi.sdk.listeners.OnTelepresenceEventChangedListener;
+import com.robotemi.sdk.listeners.OnTelepresenceStatusChangedListener;
 import com.robotemi.sdk.model.CallEventModel;
 import com.robotemi.sdk.navigation.listener.OnCurrentPositionChangedListener;
 import com.robotemi.sdk.navigation.model.Position;
+import com.robotemi.sdk.telepresence.CallState;
 
 import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
 import org.eclipse.paho.client.mqttv3.MqttCallbackExtended;
@@ -78,6 +80,7 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
         OnSdkExceptionListener,
         OnCurrentPositionChangedListener,
         OnTelepresenceEventChangedListener,
+        OnTelepresenceStatusChangedListener,
         OnGoToLocationStatusChangedListener {
 
     //Permission
@@ -140,7 +143,6 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
         try {
             String th_encode = URLEncoder.encode(word, "utf-8");
             String DOWNLOAD_URL = "https://tts-kaitom2.iapp.co.th/tts?text=" + th_encode;
-            printLog(DOWNLOAD_URL);
             try {
                 PlayAudioManager.playAudio(getApplicationContext(), DOWNLOAD_URL);
             } catch (Exception e) {
@@ -149,8 +151,20 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
         } catch (UnsupportedEncodingException e) {
             e.printStackTrace();
         }
+
+        RobotActionComplete();
+
     }
 
+    public void RobotActionComplete() {
+        try {
+            mqttWrapper.publish("actionState/", "DONE");
+            isRobotActionComplete = true;
+        }catch (Exception e) {
+            e.printStackTrace();
+        }
+
+    }
     //Androod App callback -------------------------------------------------------
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -176,12 +190,10 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
         speechRecognizer.setRecognitionListener(new RecognitionListener() {
             @Override
             public void onReadyForSpeech(Bundle params) {
-                printLog("START");
             }
 
             @Override
             public void onBeginningOfSpeech() {
-                printLog("Start speak");
             }
 
             @Override
@@ -223,7 +235,6 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
             }
         });
 
-
         robot = Robot.getInstance(); // get an instance of the robot in order to begin using its features.
         robot.addOnSdkExceptionListener(this);
         robot.addOnCurrentPositionChangedListener(this);
@@ -244,20 +255,22 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
         robot.addAsrListener(this);
     }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        //Case for
+    }
+
     // ------------------------------------------------------ Robot SDK Callvack -------------------------------------------------------------
     @Override
     public void onRobotReady(boolean isReady) {
         if (isReady) {
             try {
                 final ActivityInfo activityInfo = getPackageManager().getActivityInfo(getComponentName(), PackageManager.GET_META_DATA);
-//                Robot.getInstance().onStart(); //method may change the visibility of top bar.
-
                 robot.onStart(activityInfo);
-                printLog(robot.getWakeupWord());
                 robot.requestToBeKioskApp();
-                //Start MQTT Server
                 StartMqtt();
-
+                RobotActionComplete();
             } catch (PackageManager.NameNotFoundException e) {
                 throw new RuntimeException(e);
             }
@@ -268,8 +281,7 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
     @Override
     public void onTtsStatusChanged(@NotNull TtsRequest ttsRequest) {
         if (ttsRequest.getStatus() == TtsRequest.Status.COMPLETED) {
-            mqttWrapper.publish("actionState/", "Done");
-            isRobotActionComplete = true;
+            RobotActionComplete();
         }
     }
 
@@ -286,11 +298,23 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
         } else if (callEventModel.getType() == CallEventModel.TYPE_OUTGOING) {
             Toast.makeText(this, "Outgoing call", Toast.LENGTH_LONG).show();
         } else if (callEventModel.getType() == CallEventModel.STATE_ENDED) {
-            mqttWrapper.publish("actionState/", "Done");
-            isRobotActionComplete = true;
+            RobotActionComplete();
         }
     }
+    @Override
+    public void onTelepresenceStatusChanged(@NotNull CallState callState) {
+        printLog(callState.toString());
+        if(callState.equals(CallState.State.STARTED)) {
+            printLog("Call Start");
+        }
+        else if(callState.equals(CallState.State.DECLINED)) {
 
+        }
+        else if(callState.equals(CallState.State.ENDED)) {
+            printLog("Call end");
+            RobotActionComplete();
+        }
+    }
 
     @Override
     public void onGoToLocationStatusChanged(@NotNull String location, @NotNull String status, int descriptionId, @NotNull String description) {
@@ -303,8 +327,7 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
                 break;
             case OnGoToLocationStatusChangedListener.COMPLETE:
                 printLog("Arrived");
-                isRobotActionComplete = true;
-                mqttWrapper.publish("actionState/", "Done");
+                RobotActionComplete();
                 break;
         }
     }
@@ -460,6 +483,7 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
             robot.askQuestion("Sorry I can't understand you, could you please ask something else?");
         }
     }
+
 }
 
 //Async Task
