@@ -72,6 +72,15 @@ import java.util.Set;
 import java.util.concurrent.locks.ReentrantLock;
 import java.nio.charset.StandardCharsets;
 
+
+/*
+ * Contact List
+ * Kobkrit:dade8fa3ac93fcf26340397be3d5840a
+ * P'man:fe1090ed941db12ed1d350730031ea5b
+ * พี่แพรSIIT:4990c18cea5e6604cc1adc384fe224e8
+ * Aj Virach:67696f1ff709a3b0804ae43641ed8d85
+ * */
+
 public class MainActivity<RobotActionExecutorService> extends AppCompatActivity implements
         OnRobotReadyListener,
         Robot.TtsListener,
@@ -80,7 +89,7 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
         OnSdkExceptionListener,
         OnCurrentPositionChangedListener,
         OnTelepresenceEventChangedListener,
-        OnTelepresenceStatusChangedListener,
+//        OnTelepresenceStatusChangedListener,
         OnGoToLocationStatusChangedListener {
 
     //Permission
@@ -162,6 +171,7 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
             isRobotActionComplete = true;
         }catch (Exception e) {
             e.printStackTrace();
+            printLog(e.toString());
         }
 
     }
@@ -173,6 +183,8 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
         verifyStroagePermission(this);
         verifyAudioRecordPermission(this);
 
+        StartMqtt();
+
 
         speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this); //STT
         speechRecognizerIntent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH); //STT
@@ -182,7 +194,11 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
         button.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                speechRecognizer.startListening(speechRecognizerIntent); //Get built-in STT working
+//                speechRecognizer.startListening(speechRecognizerIntent); //Get built-in STT working
+//                robot.startTelepresence("TEST", "fe1090ed941db12ed1d350730031ea5b");
+
+//                RobotActionComplete();
+                robot.startTelepresence("TEST", "fe1090ed941db12ed1d350730031ea5b");
             }
         });
 
@@ -238,6 +254,7 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
         robot = Robot.getInstance(); // get an instance of the robot in order to begin using its features.
         robot.addOnSdkExceptionListener(this);
         robot.addOnCurrentPositionChangedListener(this);
+        robot.addOnTelepresenceEventChangedListener(this);
 
     }
 
@@ -253,12 +270,12 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
         robot.addTtsListener(this);
         robot.addWakeupWordListener(this);
         robot.addAsrListener(this);
+        robot.addOnGoToLocationStatusChangedListener(this);
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        //Case for
     }
 
     // ------------------------------------------------------ Robot SDK Callvack -------------------------------------------------------------
@@ -269,7 +286,6 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
                 final ActivityInfo activityInfo = getPackageManager().getActivityInfo(getComponentName(), PackageManager.GET_META_DATA);
                 robot.onStart(activityInfo);
                 robot.requestToBeKioskApp();
-                StartMqtt();
                 RobotActionComplete();
             } catch (PackageManager.NameNotFoundException e) {
                 throw new RuntimeException(e);
@@ -299,20 +315,7 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
             Toast.makeText(this, "Outgoing call", Toast.LENGTH_LONG).show();
         } else if (callEventModel.getType() == CallEventModel.STATE_ENDED) {
             RobotActionComplete();
-        }
-    }
-    @Override
-    public void onTelepresenceStatusChanged(@NotNull CallState callState) {
-        printLog(callState.toString());
-        if(callState.equals(CallState.State.STARTED)) {
-            printLog("Call Start");
-        }
-        else if(callState.equals(CallState.State.DECLINED)) {
-
-        }
-        else if(callState.equals(CallState.State.ENDED)) {
-            printLog("Call end");
-            RobotActionComplete();
+            Toast.makeText(this, "Call end", Toast.LENGTH_LONG).show();
         }
     }
 
@@ -337,6 +340,11 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
         Log.i("POSITION", "" + position.toString());
 
     }
+
+//    @Override
+//    public void onTelepresenceStatusChanged(@NotNull CallState callState) {
+//        printLog(callState.toString());
+//    }
 
     // ------------------------------------------------------ Robot Function  -------------------------------------------------------------
     public void speak(String tts) {
@@ -379,12 +387,15 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
         }
     }
 
-    public void goTo(String des) {
+    public Boolean goTo(String des) {
         for (String location : robot.getLocations()) {
-            if (location.equals(des)) {
+            printLog(location);
+            if (location.equalsIgnoreCase(des)) {
                 robot.goTo(des);
+                return true;
             }
         }
+        return  false;
     }
 
     void printLog(String msg) {
@@ -397,7 +408,6 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
 
     //----------------------------- MQTT --------------------------------------
     private void StartMqtt() {
-        printLog("Inside MQTT START");
         mqttWrapper = new MqttWrapper(getApplicationContext());
         mqttWrapper.setCallback(new MqttCallbackExtended() {
             @Override
@@ -416,10 +426,16 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
                 printLog("Arrived message: " + message.toString());
                 try {
                     JSONObject jsonObject = new JSONObject(message.toString());
-                    if (isRobotActionComplete == true) {
+                    if ((isRobotActionComplete)) {
+                        printLog("Action Done");
+                    } else {
+                        printLog("Action Not Done");
+                    }
+                    if(isRobotActionComplete) {
                         isRobotActionComplete = false;
                         actionDecoder(jsonObject);
                     }
+
                 } catch (JSONException e) {
                     Log.d("Error", e.toString());
                 }
@@ -437,13 +453,21 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
         try {
             switch (actionInfo.get("action").toString()) {
                 case "SPEAK":
-                    speak(actionInfo.get("content").toString());
+//                    speak(actionInfo.get("content").toString());
+                    if(actionInfo.get("language").equals("th")) {
+                        RobotSpeak_TH(actionInfo.get("content").toString());
+                    }
+                    else if(actionInfo.get("language").equals("en")) {
+                        speak(actionInfo.get("content").toString());
+                    }
                     break;
                 case "GOTO":
-                    goTo(actionInfo.get("content").toString());
+                    if(goTo(actionInfo.get("content").toString())) {}
                     break;
                 case "CALL":
-                    startTelepresence(actionInfo.get("content").toString());
+                    printLog("Call to " + actionInfo.get("content").toString());
+//                    startTelepresence("Blockly-agent", actionInfo.get("content").toString());
+                    robot.startTelepresence("TEST", "fe1090ed941db12ed1d350730031ea5b");
                     break;
                 case "NLP_TH_START":
                     //start chatbot sequence

@@ -61,7 +61,7 @@ public class MqttWrapper extends Service {
                      disconnectedBufferOptions.setBufferSize(100);
                      disconnectedBufferOptions.setPersistBuffer(false);
                      disconnectedBufferOptions.setDeleteOldestMessages(false);
-
+                     Log.w("MQTT", "Connect to " + serverUri);
                      ListIterator itr = subscriptionTopic.listIterator();
                      while(itr.hasNext()) {
                          subscribeToTopic((String) itr.next());
