@@ -23,23 +23,26 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.ListIterator;
 
-public class MqttWrapper extends Service {
+public class MqttWrapper {
     public MqttAndroidClient mqttAndroidClient;
 
     final String serverUri = "tcp://babyai.org:1883";
-    final String clientID = "VirachLabo-Temi";
+
     final String username = "wifimod";
     final String password = "PeEFc9Aq";
 
-    private String TAG = "mqtt-serrvice";
 
-    List<String> subscriptionTopic = new ArrayList<String>();
+    private String clientID;
+    private String TAG = ": mqtt-service :";
+    private String topic;
 
-    public MqttWrapper(Context context) {
+    public MqttWrapper(Context context, String t, String id) {
+        topic = t;
+        clientID = id;
+        TAG = clientID + TAG;
+
         mqttAndroidClient = new MqttAndroidClient(context, serverUri, clientID);
-        SubscribeTopic("temi-cmd/");
         connect();
-
     }
 
     //MQTT Callback
@@ -61,16 +64,16 @@ public class MqttWrapper extends Service {
                      disconnectedBufferOptions.setBufferSize(100);
                      disconnectedBufferOptions.setPersistBuffer(false);
                      disconnectedBufferOptions.setDeleteOldestMessages(false);
-                     Log.w("MQTT", "Connect to " + serverUri);
-                     ListIterator itr = subscriptionTopic.listIterator();
-                     while(itr.hasNext()) {
-                         subscribeToTopic((String) itr.next());
-                     }
-                 }
+                     Log.w(TAG, "Connect to " + serverUri);
 
+                     //Subscribe to topic
+                     Log.w(TAG, topic);
+                     subscribeToTopic(topic);
+
+                 }
                  @Override
                  public void onFailure(IMqttToken asyncActionToken, Throwable exception) {
-                     Log.w("MQTT", "Fail to connect to " + serverUri + " with exception: " + exception.toString());
+                     Log.w(TAG, "Fail to connect to " + serverUri + " with exception: " + exception.toString());
 
                  }
              });
@@ -81,40 +84,31 @@ public class MqttWrapper extends Service {
      }
      private void subscribeToTopic(String subTopic) {
         try {
-            //test
-
             mqttAndroidClient.subscribe(subTopic, 0, null, new IMqttActionListener() {
                 @Override
                 public void onSuccess(IMqttToken asyncActionToken) {
-                    Log.w("MQTT", "Successfully subscribe to topic " + subTopic);
+                    Log.w(TAG, "Successfully subscribe to topic " + subTopic);
                 }
 
                 @Override
                 public void onFailure(IMqttToken asyncActionToken, Throwable exception) {
-                    Log.w("MQTT", "Successfully fail");
+                    Log.w(TAG, "fail to subscribe exception" + exception.toString());
                 }
             });
-
         }catch (MqttException ex) {
-//            System.err.println("Exception whilst subscribing");
             ex.printStackTrace();
         }
      }
      public void reconnect() {
         connect();
      }
-     public void SubscribeTopic(String subTopic){
-         try {
-             subscriptionTopic.add(subTopic);
-         }
-         catch (Exception e) {
-             e.printStackTrace();
-         }
-     }
 
      public void publish(String topic, String msg) {
 
-        if(mqttAndroidClient.isConnected() == false) { connect(); }
+        if(mqttAndroidClient.isConnected() == false) {
+            connect();
+        }
+
         MqttMessage mqttMessage = new MqttMessage(msg.getBytes());
         try {
             mqttAndroidClient.publish(topic, mqttMessage);
@@ -123,16 +117,4 @@ public class MqttWrapper extends Service {
             e.printStackTrace();
         }
      }
-
-    @Nullable
-    @Override
-    public IBinder onBind(Intent intent) {
-        return null;
-    }
-
-    @Override
-    public int onStartCommand(Intent intent, int flags, int startId) {
-        Log.v(TAG, "onStartCommand()");
-        return START_STICKY;
-    }
 }
