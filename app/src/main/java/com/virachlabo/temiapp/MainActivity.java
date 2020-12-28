@@ -8,6 +8,7 @@ import androidx.core.app.ActivityCompat;
 import android.Manifest;
 import android.app.Activity;
 import android.app.DownloadManager;
+import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
@@ -25,6 +26,7 @@ import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
 import android.util.Log;
 import android.view.View;
+import android.webkit.WebView;
 import android.widget.Button;
 import android.widget.Toast;
 
@@ -85,7 +87,6 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
         OnRobotReadyListener,
         Robot.TtsListener,
         Robot.WakeupWordListener,
-        Robot.AsrListener,
         OnSdkExceptionListener,
         OnCurrentPositionChangedListener,
         OnTelepresenceEventChangedListener,
@@ -116,6 +117,7 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
     //Object and Variable
     private Robot robot;
     private String temi_serial = "01234";
+    public static String WEBVIEW_URL = "";
     //TODO
     //[] How to get serial number
 
@@ -243,7 +245,7 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
 //                robot.startTelepresence("TEST", "fe1090ed941db12ed1d350730031ea5b");
 
 //                RobotActionComplete();
-                robot.startTelepresence("TEST", "fe1090ed941db12ed1d350730031ea5b");
+//                robot.startTelepresence("TEST", "fe1090ed941db12ed1d350730031ea5b");
             }
         });
     }
@@ -278,7 +280,6 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
         robot.addOnRobotReadyListener(this);
         robot.addTtsListener(this);
         robot.addWakeupWordListener(this);
-        robot.addAsrListener(this);
         robot.addOnGoToLocationStatusChangedListener(this);
     }
 
@@ -447,15 +448,6 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
                 printLog("Arrived message: " + message.toString());
                 try {
                     JSONObject jsonObject = new JSONObject(message.toString());
-//                    if ((isRobotActionComplete)) {
-//                        printLog("Action Done");
-//                    } else {
-//                        printLog("Action Not Done");
-//                    }
-//                    if(isRobotActionComplete) {
-//                        isRobotActionComplete = false;
-//                        actionDecoder(jsonObject);
-//                    }
                     actionDecoder(jsonObject);
 
                 } catch (JSONException e) {
@@ -489,6 +481,17 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
 //                    startTelepresence("Blockly-agent", actionInfo.get("content").toString());
                     robot.startTelepresence("TEST", "fe1090ed941db12ed1d350730031ea5b");
                     break;
+                case "openweb":
+                    String URL = actionInfo.get("content").toString();
+                    Intent webIntent = new Intent(getApplicationContext(), WebviewActivity.class);
+                    webIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    webIntent.putExtra(WEBVIEW_URL, actionInfo.get("content").toString());
+                    try{
+                        getApplicationContext().startActivity(webIntent);
+                    }catch (ActivityNotFoundException e) {
+                        e.printStackTrace();
+                    }
+                    break;
             }
         } catch (JSONException e) {
             e.printStackTrace();
@@ -501,32 +504,9 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
         speechRecognizer.startListening(speechRecognizerIntent); //Get built-in STT working
     }
 
-    @Override
-    public void onAsrResult(@NotNull String asrResult) {
-        printLog("onAsrResult", "asrResult = " + asrResult);
-
-        if (asrResult.equalsIgnoreCase("Hello")) {
-            robot.askQuestion("Hello, I'm temi, what can I do for you?");
-        } else if (asrResult.equalsIgnoreCase("Play music")) {
-            robot.speak(TtsRequest.create("Okay, please enjoy.", false));
-            robot.finishConversation();
-        } else if (asrResult.equalsIgnoreCase("Play movie")) {
-            robot.speak(TtsRequest.create("Okay, please enjoy.", false));
-            robot.finishConversation();
-        } else if (asrResult.toLowerCase().contains("follow me")) {
-            robot.finishConversation();
-            robot.beWithMe();
-        } else if (asrResult.toLowerCase().contains("go to home base")) {
-            robot.finishConversation();
-            robot.goTo("home base");
-        } else {
-            robot.askQuestion("Sorry I can't understand you, could you please ask something else?");
-        }
-    }
 
 }
 
-//Async Task
 
 
 

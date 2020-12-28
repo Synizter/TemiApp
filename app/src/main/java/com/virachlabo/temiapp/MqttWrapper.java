@@ -31,10 +31,13 @@ public class MqttWrapper {
     final String username = "wifimod";
     final String password = "PeEFc9Aq";
 
-
     private String clientID;
     private String TAG = ": mqtt-service :";
     private String topic;
+
+    private enum LOG_LEVEL {
+        VERBOSE, WARNING, ERROR, INFO
+    }
 
     public MqttWrapper(Context context, String t, String id) {
         topic = t;
@@ -65,16 +68,14 @@ public class MqttWrapper {
                      disconnectedBufferOptions.setPersistBuffer(false);
                      disconnectedBufferOptions.setDeleteOldestMessages(false);
                      Log.w(TAG, "Connect to " + serverUri);
+                     _log("The client is successfully connected to " + mqttConnectOptions.getServerURIs().toString(), LOG_LEVEL.INFO);
 
-                     //Subscribe to topic
-                     Log.w(TAG, topic);
                      subscribeToTopic(topic);
 
                  }
                  @Override
                  public void onFailure(IMqttToken asyncActionToken, Throwable exception) {
-                     Log.w(TAG, "Fail to connect to " + serverUri + " with exception: " + exception.toString());
-
+                    _log("Cannot connect " + serverUri + " with exception " + exception.toString(), LOG_LEVEL.ERROR);
                  }
              });
          } catch (MqttException e) {
@@ -87,12 +88,12 @@ public class MqttWrapper {
             mqttAndroidClient.subscribe(subTopic, 0, null, new IMqttActionListener() {
                 @Override
                 public void onSuccess(IMqttToken asyncActionToken) {
-                    Log.w(TAG, "Successfully subscribe to topic " + subTopic);
+                    _log("Successfully subscribe to topic " + subTopic, LOG_LEVEL.INFO);
                 }
 
                 @Override
                 public void onFailure(IMqttToken asyncActionToken, Throwable exception) {
-                    Log.w(TAG, "fail to subscribe exception" + exception.toString());
+                    _log("fail to subscribe exception" + exception.toString(), LOG_LEVEL.ERROR);
                 }
             });
         }catch (MqttException ex) {
@@ -104,12 +105,10 @@ public class MqttWrapper {
      }
 
      public void publish(String topic, String msg) {
-
-        if(mqttAndroidClient.isConnected() == false) {
-            connect();
+         MqttMessage mqttMessage = new MqttMessage(msg.getBytes());
+        if(!mqttAndroidClient.isConnected()) {
+            reconnect();
         }
-
-        MqttMessage mqttMessage = new MqttMessage(msg.getBytes());
         try {
             mqttAndroidClient.publish(topic, mqttMessage);
         }
@@ -117,4 +116,21 @@ public class MqttWrapper {
             e.printStackTrace();
         }
      }
+
+    public void _log(String msg, LOG_LEVEL level) {
+        switch (level) {
+            case ERROR:
+                Log.e(this.TAG, msg);
+                break;
+            case WARNING:
+                Log.w(this.TAG, msg);
+                break;
+            case VERBOSE:
+                Log.v(this.TAG, msg);
+                break;
+            case INFO:
+                Log.i(this.TAG, msg);
+                break;
+        }
+    }
 }
