@@ -478,8 +478,7 @@ public class MainActivity<RobotActionExecutorService> extends AppCompatActivity 
                     break;
                 case "call":
                     printLog("Call to " + actionInfo.get("content").toString());
-//                    startTelepresence("Blockly-agent", actionInfo.get("content").toString());
-                    robot.startTelepresence("TEST", "fe1090ed941db12ed1d350730031ea5b");
+                    startTelepresence("Blockly-agent", actionInfo.get("content").toString());
                     break;
                 case "openweb":
                     String URL = actionInfo.get("content").toString();
